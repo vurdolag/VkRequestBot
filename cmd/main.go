@@ -1,8 +1,8 @@
 package main
 
 import (
-	vksession "VkRequestBot/internal"
-	server "VkRequestBot/internal/server"
+	"VkRequestBot/internal/server"
+	"VkRequestBot/internal/vksession"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -74,20 +74,6 @@ func bot() {
 
 	go server.Run()
 }
-
-/*
-func test() {
-	b, _ := vksession.LoadFile("temp.txt")
-
-	j, _ := vksession.jsArr(b, "payload.[1].[0].all")
-
-	for k, v := range j {
-		fmt.Println(k, string(v))
-	}
-
-}
-
-*/
 
 func main() {
 	time.Sleep(time.Second * 2)

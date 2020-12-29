@@ -207,8 +207,8 @@ type FriendAll struct {
 }
 
 type FeedUpdate struct {
-	Version int
-	Type    string
+	Version   int
+	Type      string
 	Link      string
 	Text      string
 	Author_id int

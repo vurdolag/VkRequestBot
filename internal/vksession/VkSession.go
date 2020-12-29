@@ -252,7 +252,7 @@ type DataResponse struct {
 
 func InitDataResponse(muGlobal *sync.Mutex) *DataResponse {
 	r := &DataResponse{
-		data:           make([]byte, 2000000, 2000000),
+		data:           make([]byte, 10000000, 10000000),
 		responseIds:    0,
 		lastWriteIndex: 0,
 		activeResponse: make([][]int, 120, 120),
