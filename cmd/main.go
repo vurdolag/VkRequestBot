@@ -1,15 +1,16 @@
 package main
 
 import (
+	"VkRequestBot/configs"
 	"VkRequestBot/internal/server"
-	"VkRequestBot/internal/vksession"
-	"encoding/json"
-	"fmt"
+	"VkRequestBot/internal/vk"
+	"flag"
 	"math/rand"
-	"strings"
 	"sync"
 	"time"
 )
+
+var confPath = flag.String("conf-path", "./configs/.env", "path to conf .env")
 
 var listClub = []string{
 	"public193767860",
@@ -21,40 +22,27 @@ var listClub = []string{
 }
 
 func bot() {
+	conf, _ := configs.New(*confPath)
+	go server.Run(conf)
+
 	rand.Seed(time.Now().UnixNano())
 
 	muGlobal := new(sync.Mutex)
-	re := vksession.InitRE(muGlobal)
-	bd := vksession.InitDataBase(muGlobal)
-	dataAnswer := vksession.InitAnswerDataBase()
-	dataResponse := vksession.InitDataResponse(muGlobal)
+	re := vk.InitRE(muGlobal)
+	bd := vk.InitDataBase(muGlobal)
+	dataAnswer := vk.InitAnswerDataBase(conf)
+	dataResponse := vk.InitDataResponse(muGlobal)
+	accounts := vk.LoadAccount(conf)
 
-	file, _ := vksession.LoadFile("akks.json")
-	var v []vksession.Akk
-	var o []vksession.Akk
-	err := json.Unmarshal(file, &v)
-	if err != nil {
-		fmt.Println("json", err)
-	}
-
-	for _, akk := range v {
-		vk := vksession.InitVkSession(akk, re, dataResponse, muGlobal)
-		a := vk.Auth()
+	for _, acc := range accounts {
+		v := vk.InitVkSession(acc, re, dataResponse, muGlobal, conf)
+		a := v.Auth()
 
 		if !a {
 			continue
 		}
 
-		act := vksession.InitAction(vk, dataAnswer, bd)
-
-		o = append(o, vksession.Akk{
-			Name:      vk.MyName,
-			Id:        vk.MyId,
-			Login:     vk.Login,
-			Password:  vk.Password,
-			Useragent: vk.Heads,
-			Proxy:     vk.Proxy,
-		})
+		act := vk.InitAction(v, dataAnswer, bd)
 
 		go act.LongPool()
 		go act.CheckFriends()
@@ -63,16 +51,9 @@ func bot() {
 		go act.Reposter(listClub, "", false, 10, 10, 66, "30688695")
 		go act.RandomLikeFeed()
 
-		vksession.RandSleep(90, 30)
+		//vksession.RandSleep(90, 30)
+		break
 	}
-
-	res, _ := json.Marshal(o)
-
-	s := strings.ReplaceAll(string(res), "\",", "\",\n")
-
-	vksession.WriteFile("newAkk.json", s)
-
-	go server.Run()
 }
 
 func main() {
