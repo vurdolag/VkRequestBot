@@ -1,4 +1,4 @@
-package main
+package vksession
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func InitAction (vk *VkSession, data *DataAnswer, bd *DataBase) *Action {
+func InitAction(vk *VkSession, data *DataAnswer, bd *DataBase) *Action {
 	act := new(Action)
 	act.bd = bd
 	act.vk = vk
@@ -23,11 +23,11 @@ func InitAction (vk *VkSession, data *DataAnswer, bd *DataBase) *Action {
 }
 
 type Action struct {
-	vk *VkSession
+	vk  *VkSession
 	Bot *BotAnswer
-	bd *DataBase
+	bd  *DataBase
 
-	myGroupList []string
+	myGroupList      []string
 	alreadyDelDialog []int
 }
 
@@ -64,7 +64,7 @@ func (self *Action) eventProcessing(event *Event) *Event {
 	return event
 }
 
-func (self *Action) LongPool(){
+func (self *Action) LongPool() {
 	go self.vk.methods.LongPoll(self)
 	randSleep(15, 5)
 	go self.vk.methods.setOnline()
@@ -76,11 +76,15 @@ func (self *Action) checkUser(userId string) (bool, error) {
 	self.vk.muGlobal.Lock()
 	infoUser, err := getUserInfoFromApi(userId)
 	self.vk.muGlobal.Unlock()
-	if infoUser == nil { return false, err }
+	if infoUser == nil {
+		return false, err
+	}
 
 	info := *infoUser
 
-	if err != nil || len(info) == 0 { return false, err }
+	if err != nil || len(info) == 0 {
+		return false, err
+	}
 
 	bdAns, _ := self.bd.alreadyAddUser.get(userId)
 	if userId == bdAns.Id {
@@ -101,10 +105,14 @@ func (self *Action) checkUser(userId string) (bool, error) {
 	}
 
 	img, err := requestsGet(info[0].Photo_200, nil)
-	if err != nil { return false, err }
+	if err != nil {
+		return false, err
+	}
 
 	score, err := moderationImg(img)
-	if err != nil || len(score) != 4 { return false, err }
+	if err != nil || len(score) != 4 {
+		return false, err
+	}
 
 	if score["adult"] > 0.9 || score["gruesome"] > 0.9 {
 		self.vk.logs(fmt.Sprintf("Неприемлимый аватар: %d", userId))
@@ -120,7 +128,10 @@ func (self *Action) acceptOrDeclineNewFriend() error {
 	self.vk.logs(fm("Запуск проверки новых друзей"))
 
 	newFriend, err := self.vk.methods.getNewFriendList()
-	if err != nil { self.vk.logs(fm("ошибка проверки новых друзей")); return err }
+	if err != nil {
+		self.vk.logs(fm("ошибка проверки новых друзей"))
+		return err
+	}
 
 	if len(newFriend) > 0 {
 		self.vk.logs(fm("Новых друзей найдено: %d", len(newFriend)))
@@ -132,12 +143,16 @@ func (self *Action) acceptOrDeclineNewFriend() error {
 	add, notAdd := 0, 0
 
 	for userId, listHash := range newFriend {
-		if len(listHash) != 2 { continue }
+		if len(listHash) != 2 {
+			continue
+		}
 
 		check, _ := self.checkUser(userId)
 		id, _ := strconv.Atoi(userId)
 
-		if id == 0 { continue }
+		if id == 0 {
+			continue
+		}
 
 		if check {
 			add++
@@ -169,13 +184,15 @@ func (self *Action) DelOutRequests(toBlackList bool) {
 	randSleep(600, 180)
 	for self.vk.methods.working {
 		err := self.vk.methods.DelOutRequests(toBlackList)
-		if err != nil { self.vk.logsErr(err) }
+		if err != nil {
+			self.vk.logsErr(err)
+		}
 		randSleep(7200, 3600)
 	}
 }
 
 func (self *Action) Reposter(targets []string, msg string, fromGroup bool,
-		                     rndRepost, rndLike, rndTarget float32, targetGroup string) {
+	rndRepost, rndLike, rndTarget float32, targetGroup string) {
 
 	randSleep(600, 180)
 	for self.vk.methods.working {
@@ -198,12 +215,12 @@ func (self *Action) Reposter(targets []string, msg string, fromGroup bool,
 			}
 			l := len(self.myGroupList)
 			groupId = fm("club%s", self.myGroupList[rand.Intn(l)][1:])
-			targets = []string{ groupId }
+			targets = []string{groupId}
 		}
 
 		//club53454
 		target := targets[rand.Intn(len(targets))]
-		postIds, err := self.vk.methods.getPostFrom(target, nil, rand.Intn(10) + 10)
+		postIds, err := self.vk.methods.getPostFrom(target, nil, rand.Intn(10)+10)
 		if err != nil {
 			self.vk.logsErr(err)
 			continue
@@ -216,11 +233,15 @@ func (self *Action) Reposter(targets []string, msg string, fromGroup bool,
 
 			if post != newRepost.Id {
 				_, err = self.bd.newRepost.put(post, -1)
-				if err != nil { self.vk.logsErr(err) }
+				if err != nil {
+					self.vk.logsErr(err)
+				}
 
-				if isRand(90 ) {
+				if isRand(90) {
 					t := make([]string, 0, 20)
-					for _, v := range postIds { t = append(t, v[0]) }
+					for _, v := range postIds {
+						t = append(t, v[0])
+					}
 					self.vk.methods.viewPost(t, []string{}, 40)
 				}
 
@@ -244,7 +265,7 @@ func (self *Action) RandomLikeFeed() {
 	for self.vk.methods.working {
 		self.vk.log("random like feed start")
 
-		likeFeed, err := self.vk.methods.getPostFrom("", nil, rand.Intn(9) + 7)
+		likeFeed, err := self.vk.methods.getPostFrom("", nil, rand.Intn(9)+7)
 		if err != nil || len(likeFeed) == 0 {
 			self.vk.logsErr(err)
 			randSleep(1200, 300)
@@ -265,7 +286,9 @@ func (self *Action) RandomLikeFeed() {
 		hashLike := post[1]
 
 		postIdForView := make([]string, 0, 15)
-		for i := range likeFeed { postIdForView = append(postIdForView, likeFeed[i][0]) }
+		for i := range likeFeed {
+			postIdForView = append(postIdForView, likeFeed[i][0])
+		}
 
 		self.vk.methods.viewPost(postIdForView, []string{}, 40)
 
@@ -277,7 +300,7 @@ func (self *Action) RandomLikeFeed() {
 	}
 }
 
-func (self *Action) DelDogAndPornFromFriends (lastSeen int) {
+func (self *Action) DelDogAndPornFromFriends(lastSeen int) {
 	randSleep(600, 180)
 	for self.vk.methods.working {
 		self.vk.logs("Запуск удаления собак и непристойных юзеров")
@@ -293,14 +316,16 @@ func (self *Action) DelDogAndPornFromFriends (lastSeen int) {
 		lenFriend := len(friend)
 
 		temp := make([]string, lenFriend)
-		randSlice := rand.Perm(lenFriend-1)
+		randSlice := rand.Perm(lenFriend - 1)
 		for i, j := range randSlice {
 			temp[i] = friend[j].Id
 		}
 
 		self.vk.muGlobal.Lock()
 		infoUser, er := getUserInfoFromApi(temp...)
-		if er != nil { self.vk.logsErr(er) }
+		if er != nil {
+			self.vk.logsErr(er)
+		}
 		self.vk.muGlobal.Unlock()
 
 		info := *infoUser
@@ -315,9 +340,13 @@ func (self *Action) DelDogAndPornFromFriends (lastSeen int) {
 				flag = 1
 			}
 
-			if info[index].Deactivated != "" { flag = 1}
+			if info[index].Deactivated != "" {
+				flag = 1
+			}
 
-			if lastSeen != -1 && int(time.Now().Unix()) - info[index].Last_seen.Time > lastSeen { flag = 1}
+			if lastSeen != -1 && int(time.Now().Unix())-info[index].Last_seen.Time > lastSeen {
+				flag = 1
+			}
 
 			if flag == 1 {
 				count++
@@ -336,60 +365,67 @@ func (self *Action) DelDogAndPornFromFriends (lastSeen int) {
 	}
 }
 
-
-
 func InitAnswerDataBase() *DataAnswer {
 	var dataList = make([][][]string, 0, 700)
 	var endDataList = make([]string, 0, 30)
 
 	data, err := loadFile("answer/text.txt")
-	if err != nil {panic(err)}
+	if err != nil {
+		panic(err)
+	}
 
 	for _, vals := range strings.Split(string(data), "\n") {
-		if vals == "" { continue }
+		if vals == "" {
+			continue
+		}
 		temps := make([][]string, 0, 10)
-		for index, val := range strings.Split(vals, "||"){
+		for index, val := range strings.Split(vals, "||") {
 			temp := make([]string, 0, 10)
 			for _, v := range strings.Split(val, ",,") {
-				if index == 0 { v = enc(v) }
+				if index == 0 {
+					v = enc(v)
+				}
 				temp = append(temp, v)
 			}
 			if index == 0 {
 				if temp[0] == "#" {
 					temp = []string{fmt.Sprintf("(%s)", strings.Join(temp[1:], "|"))}
-					} else {
-						temp = []string{fmt.Sprintf(`(\b%s\b)`, strings.Join(temp, `\b|\b`))}
-					 	}
-					}
+				} else {
+					temp = []string{fmt.Sprintf(`(\b%s\b)`, strings.Join(temp, `\b|\b`))}
+				}
+			}
 			temps = append(temps, temp)
 		}
 
-		if len(temps) != 2 { continue }
+		if len(temps) != 2 {
+			continue
+		}
 		dataList = append(dataList, temps)
 	}
 
 	endData, err := loadFile("answer/EndPhrase.txt")
-	if err != nil {panic(err)}
+	if err != nil {
+		panic(err)
+	}
 
 	endDataList = strings.Split(string(endData), ",,")
 
 	return &DataAnswer{
-		botDataBase: dataList,
+		botDataBase:   dataList,
 		endAnswerList: endDataList,
 	}
 }
 
-
 type DataAnswer struct {
-	botDataBase [][][]string
+	botDataBase   [][][]string
 	endAnswerList []string
 }
 
 type BotAnswer struct {
-	vk *VkSession
+	vk             *VkSession
 	maxCountAnswer int
-	data *DataAnswer
-	bd *DataBase
+	data           *DataAnswer
+	bd             *DataBase
 }
 
 func (self *BotAnswer) answer(event *Event) *Event {
@@ -427,7 +463,9 @@ func (self *BotAnswer) answer(event *Event) *Event {
 func (self *BotAnswer) commentAnswer(event *Event) *Event {
 	self.answer(event)
 
-	if event.textOut == "" { return event }
+	if event.textOut == "" {
+		return event
+	}
 
 	idPost := event.comment.idPost
 	fromId := event.comment.fromId
@@ -462,11 +500,13 @@ func (self *BotAnswer) getAnswer(event *Event) (string, [][][]string) {
 		}
 	}
 
-	fmt.Println("time ->", time.Now().UnixNano() - t1)
+	fmt.Println("time ->", time.Now().UnixNano()-t1)
 
 	if len(answers) > 0 {
 		return randChoice(answers[0][1]), answers
-	} else { return "", answers }
+	} else {
+		return "", answers
+	}
 }
 
 func (self *BotAnswer) getEndAnswer(targetAnswer string, maxAnswer int) string {
@@ -499,7 +539,7 @@ func (self *BotAnswer) preparation(event *Event) int {
 	maxAnswer, err := self.bd.maxAnswer.get(qBd)
 
 	if err == nil && maxAnswer.Id == qBd {
-		_, _ = self.bd.maxAnswer.up(qBd, maxAnswer.Count + 1)
+		_, _ = self.bd.maxAnswer.up(qBd, maxAnswer.Count+1)
 		return maxAnswer.Count
 	} else {
 		_, _ = self.bd.maxAnswer.put(qBd, 1)
@@ -509,12 +549,12 @@ func (self *BotAnswer) preparation(event *Event) int {
 
 func (self *BotAnswer) log(event *Event, maxAnswer int) {
 	self.vk.log(event.fromId, maxAnswer, "<-", event.text)
-	self.vk.logs(fm("%d, %d <- %s", event.fromId, maxAnswer, event.text), "msg/" + self.vk.Login)
+	self.vk.logs(fm("%d, %d <- %s", event.fromId, maxAnswer, event.text), "msg/"+self.vk.Login)
 
 	if event.textOut == "" {
 		self.vk.logs(fm("%d, %d <- %s", event.fromId, maxAnswer, event.text), "msg_not_answer")
 	} else {
-		self.vk.logs(fm("%d, %d -> %s", event.fromId, maxAnswer, event.textOut), "msg/" + self.vk.Login)
+		self.vk.logs(fm("%d, %d -> %s", event.fromId, maxAnswer, event.textOut), "msg/"+self.vk.Login)
 		self.vk.log(event.fromId, maxAnswer, "->", event.textOut)
 	}
 }

@@ -1,4 +1,4 @@
-package main
+package vksession
 
 import (
 	"fmt"
@@ -13,27 +13,35 @@ func InitComment(update FeedUpdate, re *RE) Comment {
 }
 
 type Comment struct {
-	idPost string
-	reply string
-	thread string
-	link string
+	idPost      string
+	reply       string
+	thread      string
+	link        string
 	typeComment string
-	fromId int
+	fromId      int
 }
 
-func (self *Comment) pars(up FeedUpdate, re *RE){
+func (self *Comment) pars(up FeedUpdate, re *RE) {
 	update := up.Link + "&"
 
 	reply := re.FindAllBetweenStr(update, "reply=", "&")
-	if len(reply) != 0 { self.reply = reply[0] }
+	if len(reply) != 0 {
+		self.reply = reply[0]
+	}
 
 	thread := re.FindAllBetweenStr(update, "thread=", "&")
-	if len(thread) != 0 { self.thread = thread[0] }
+	if len(thread) != 0 {
+		self.thread = thread[0]
+	}
 
 	idPost := re.FindAllBetweenStr(update, "com/", "\\?")
-	if len(idPost) != 0 { self.idPost = idPost[0] } else {
+	if len(idPost) != 0 {
+		self.idPost = idPost[0]
+	} else {
 		idPost = re.FindAllBetweenStr(update, "com/", "&")
-		if len(idPost) != 0 { self.idPost = idPost[0] }
+		if len(idPost) != 0 {
+			self.idPost = idPost[0]
+		}
 	}
 
 	fromId := re.FindAllBetweenStr(up.Title, "mention_id=", "\"")
@@ -55,20 +63,19 @@ var reEventPars5, _ = regexp.Compile("<.*?=")
 var eventUpdateTypeId = []int{33, 49, 2097185, 1, 17}
 
 type Event struct {
-	empty bool
-	id string
-	text string
-	textOut string
-	update []interface{}
-	messageId int
-	fromId int
-	attachment Atta
-	timeStamp int
+	empty           bool
+	id              string
+	text            string
+	textOut         string
+	update          []interface{}
+	messageId       int
+	fromId          int
+	attachment      Atta
+	timeStamp       int
 	messageFromUser bool
 	messageFromChat bool
-	fromFeed bool
-	comment Comment
-
+	fromFeed        bool
+	comment         Comment
 }
 
 func (self *Event) pars(update []byte, fromFeed bool, re *RE) *Event {
@@ -79,12 +86,12 @@ func (self *Event) pars(update []byte, fromFeed bool, re *RE) *Event {
 		title := finderFirst(update, "\"title\":", "\",\"text\":")
 
 		feed := FeedUpdate{
-			Version: j.Int("version"),
-			Type: j.Get("type"),
-			Link: j.Get("link"),
-			Text: text,
+			Version:   j.Int("version"),
+			Type:      j.Get("type"),
+			Link:      j.Get("link"),
+			Text:      text,
 			Author_id: j.Int("author_id"),
-			Title: title,
+			Title:     title,
 		}
 
 		self.fromFeed = true
@@ -132,7 +139,9 @@ func (self *Event) pars(update []byte, fromFeed bool, re *RE) *Event {
 }
 
 func (self *Event) clearMessage(str string) string {
-	if len(reEventPars1.FindAllString(str, -1)) != 0{ return "" }
+	if len(reEventPars1.FindAllString(str, -1)) != 0 {
+		return ""
+	}
 	str = reEventPars3.ReplaceAllString(str, "\"")
 	str = reEventPars2.ReplaceAllString(str, "")
 	str = reEventPars4.ReplaceAllString(str, "")
@@ -144,7 +153,3 @@ func (self *Event) Answer(msg string) *Event {
 	return self
 
 }
-
-
-
-

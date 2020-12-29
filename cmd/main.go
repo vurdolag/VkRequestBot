@@ -1,6 +1,7 @@
 package main
 
 import (
+	vksession "VkRequestBot/internal"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -18,63 +19,64 @@ var listClub = []string{
 	"club174587092",
 }
 
-
-func bot () {
+func bot() {
 	rand.Seed(time.Now().UnixNano())
 
 	muGlobal := new(sync.Mutex)
-	re := InitRE(muGlobal)
-	bd := InitDataBase(muGlobal)
-	dataAnswer := InitAnswerDataBase()
-	dataResponse := InitDataResponse(muGlobal)
+	re := vksession.InitRE(muGlobal)
+	bd := vksession.InitDataBase(muGlobal)
+	dataAnswer := vksession.InitAnswerDataBase()
+	dataResponse := vksession.InitDataResponse(muGlobal)
 
-	file, _ := loadFile("akks.json")
-	var v []Akk
-	var o []Akk
+	file, _ := vksession.LoadFile("akks.json")
+	var v []vksession.Akk
+	var o []vksession.Akk
 	err := json.Unmarshal(file, &v)
-	if err != nil { fmt.Println("json", err) }
+	if err != nil {
+		fmt.Println("json", err)
+	}
 
 	for _, akk := range v {
-		vk := InitVkSession(akk, re, dataResponse, muGlobal)
-		vk.log("AUTH start")
+		vk := vksession.InitVkSession(akk, re, dataResponse, muGlobal)
 		a := vk.Auth()
-		vk.log("AUTH -->", a)
 
-		if !a { continue }
+		if !a {
+			continue
+		}
 
-		act := InitAction(vk, dataAnswer, bd)
+		act := vksession.InitAction(vk, dataAnswer, bd)
 
-		o = append(o, Akk{
-			Name: vk.MyName,
-			Id: vk.MyId,
-			Login: vk.Login,
-			Password: vk.Password,
+		o = append(o, vksession.Akk{
+			Name:      vk.MyName,
+			Id:        vk.MyId,
+			Login:     vk.Login,
+			Password:  vk.Password,
 			Useragent: vk.Heads,
-			Proxy: vk.Proxy,
+			Proxy:     vk.Proxy,
 		})
 
 		go act.LongPool()
 		go act.CheckFriends()
 		go act.DelOutRequests(true)
-		go act.DelDogAndPornFromFriends(3600*24*14)
+		go act.DelDogAndPornFromFriends(3600 * 24 * 14)
 		go act.Reposter(listClub, "", false, 10, 10, 66, "30688695")
 		go act.RandomLikeFeed()
 
-		break
-		randSleep(90, 30)
+		vksession.RandSleep(90, 30)
 	}
 
 	res, _ := json.Marshal(o)
 
 	s := strings.ReplaceAll(string(res), "\",", "\",\n")
 
-	writeNewFileTxt("newAkk.json", s)
+	vksession.WriteFile("newAkk.json", s)
 }
 
+/*
 func test() {
-	b, _ := loadFile("temp.txt")
+	b, _ := vksession.LoadFile("temp.txt")
 
-	j, _ := jsArr(b, "payload.[1].[0].all")
+	j, _ := vksession.jsArr(b, "payload.[1].[0].all")
 
 	for k, v := range j {
 		fmt.Println(k, string(v))
@@ -82,9 +84,10 @@ func test() {
 
 }
 
-func main() {
-	time.Sleep(time.Second*2)
-	bot()
-	time.Sleep(time.Second*100000000)
-}
+*/
 
+func main() {
+	time.Sleep(time.Second * 2)
+	bot()
+	time.Sleep(time.Second * 100000000)
+}

@@ -1,6 +1,7 @@
-package main
+package vksession
 
 import (
+	"VkRequestBot/configs"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -29,13 +30,12 @@ const al_groups = "https://vk.com/al_groups.php"
 const al_public = "https://vk.com/al_public.php"
 const like = "https://vk.com/like.php"
 const hints = "https://vk.com/hints.php"
-const al_friends =  "https://vk.com/al_friends.php"
-const al_wall ="https://vk.com/al_wall.php"
-const al_photos =  "https://vk.com/al_photos.php"
+const al_friends = "https://vk.com/al_friends.php"
+const al_wall = "https://vk.com/al_wall.php"
+const al_photos = "https://vk.com/al_photos.php"
 const al_page = "https://vk.com/al_page.php"
 const friends = "https://vk.com/friends"
 const al_settings = "https://vk.com/al_settings.php"
-
 
 var moderToken string
 var lastUpdateModerToken int
@@ -62,12 +62,14 @@ func requestsGet(url_get string, params map[string]string) ([]byte, error) {
 	return body, nil
 }
 
-func postFileFromByte(targetUrl string, params map[string]string, byteData []byte) ([]byte ,error) {
+func postFileFromByte(targetUrl string, params map[string]string, byteData []byte) ([]byte, error) {
 	buf := bytes.NewReader(byteData)
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("file", "file.jpg")
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 
 	_, _ = io.Copy(part, buf)
 
@@ -77,21 +79,27 @@ func postFileFromByte(targetUrl string, params map[string]string, byteData []byt
 
 	_ = writer.Close()
 	req, err := http.NewRequest("POST", targetUrl, body)
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 	defer resp.Body.Close()
 
 	resp_body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 
 	return resp_body, nil
 }
 
-func postFileFromJson(targetUrl string, params map[string]string, byteData []byte) ([]byte ,error) {
+func postFileFromJson(targetUrl string, params map[string]string, byteData []byte) ([]byte, error) {
 	buf := bytes.NewReader(byteData)
 
 	var par string
@@ -103,66 +111,86 @@ func postFileFromJson(targetUrl string, params map[string]string, byteData []byt
 	targetUrl = targetUrl + "?" + par
 
 	req, err := http.NewRequest("POST", targetUrl, buf)
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 	defer resp.Body.Close()
 
 	resp_body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 
 	runtime.GC()
 	return resp_body, nil
 }
 
-func requestsPost(targetUrl string, params, headers map[string]string, byteData []byte) ([]byte ,error) {
+func requestsPost(targetUrl string, params, headers map[string]string, byteData []byte) ([]byte, error) {
 	req, err := http.NewRequest("POST", targetUrl, bytes.NewReader(byteData))
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 
 	if params != nil {
-		for key, val := range params{req.Form.Set(key, val)}
+		for key, val := range params {
+			req.Form.Set(key, val)
+		}
 	}
 
 	if headers != nil {
-		for key, val := range headers {req.Header.Set(key, val)}
+		for key, val := range headers {
+			req.Header.Set(key, val)
+		}
 	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 
 	defer resp.Body.Close()
 
 	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 
 	runtime.GC()
 	return respBody, nil
 }
 
-func postForm(targetUrl string, form url.Values) ([]byte ,error) {
+func postForm(targetUrl string, form url.Values) ([]byte, error) {
 	resp, err := http.PostForm(targetUrl, form)
 	defer resp.Body.Close()
-	if err != nil {fmt.Println(err)}
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {fmt.Println(err)}
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	runtime.GC()
 	return body, nil
 }
 
-func loadAkks() map[int]string {
-	file, err := os.Open("files/data.json")
-	if err != nil{
+func LoadAkks(path string) map[int]string {
+	file, err := os.Open(path) //"files/data.json")
+	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 	defer file.Close()
 	c, err := ioutil.ReadAll(file)
-	if err != nil{
+	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
@@ -172,14 +200,19 @@ func loadAkks() map[int]string {
 
 }
 
+func LoadFile(path string) ([]byte, error) {
+	r, err := loadFile(path)
+	return r, err
+}
+
 func loadFile(path string) ([]byte, error) {
 	file, err := os.Open(path)
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 	c, err := ioutil.ReadAll(file)
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 
@@ -187,21 +220,27 @@ func loadFile(path string) ([]byte, error) {
 	return c, nil
 }
 
+func WriteFile(path, source string) bool {
+	return writeNewFileTxt(path, source)
+}
+
 func writeNewFileTxt(path, source string) bool {
 	file, err := os.Create(path)
-	if err != nil{
+	if err != nil {
 		fmt.Println("Unable to create file:", err)
 		return false
 	}
 	defer file.Close()
 	_, err = file.Write([]byte(source))
-	if err != nil { fmt.Println(err) }
+	if err != nil {
+		fmt.Println(err)
+	}
 	return true
 }
 
 func translate(text string, lang string) string {
 	params := map[string]string{
-		"key": YANDEX_TRANSLATE_TOKEN,
+		"key":  configs.YANDEX_TRANSLATE_TOKEN,
 		"text": url.QueryEscape(text),
 		"lang": lang,
 	}
@@ -214,22 +253,24 @@ func translate(text string, lang string) string {
 
 	if err != nil {
 		fmt.Println(err)
-		return "Ошибка перевода =("}
+		return "Ошибка перевода =("
+	}
 
 	var response TranslateResponse
 	err = json.Unmarshal(res, &response)
 	if err != nil {
 		fmt.Println(err)
-		return "Ошибка перевода =("}
+		return "Ошибка перевода =("
+	}
 
 	return response.Text[0]
 }
 
-func checkText(text string) string{
+func checkText(text string) string {
 	params := map[string]string{"text": url.QueryEscape(text)}
 
 	resp, err := requestsGet("https://speller.yandex.net/services/spellservice.json/checkText", params)
-	if err != nil{
+	if err != nil {
 		fmt.Println("error checkText", err)
 		return text
 	}
@@ -238,7 +279,7 @@ func checkText(text string) string{
 
 	var result []CheckTextFields
 	err = json.Unmarshal(resp, &result)
-	if err != nil{
+	if err != nil {
 		fmt.Println("error checkText json", err)
 		return text
 	}
@@ -271,7 +312,7 @@ func checkText(text string) string{
 
 func yandexGetIamToken() string {
 	params := map[string]string{
-		"yandexPassportOauthToken": YANDEX_MODERATION_TOKEN,
+		"yandexPassportOauthToken": configs.YANDEX_MODERATION_TOKEN,
 	}
 	body, err := postFileFromJson("https://iam.api.cloud.yandex.net/iam/v1/tokens", params, nil)
 
@@ -281,17 +322,17 @@ func yandexGetIamToken() string {
 	}
 
 	var resp YandexGetIamTokenFields
-	json.Unmarshal(body, &resp)
+	_ = json.Unmarshal(body, &resp)
 
 	return resp.IamToken
 }
 
-func moderationImg (img []byte) (map[string]float32, error) {
-	data := `{"folderId": "` + YANDEX_FOLDER_ID + `","analyze_specs": [{"content":"` +
+func moderationImg(img []byte) (map[string]float32, error) {
+	data := `{"folderId": "` + configs.YANDEX_FOLDER_ID + `","analyze_specs": [{"content":"` +
 		base64.StdEncoding.EncodeToString(img) +
 		`","features": [{"type": "CLASSIFICATION","classificationConfig": {"model": "moderation"}}]}]}`
 
-	if moderToken == "" || time.Now().Second() - lastUpdateModerToken > 3600*6{
+	if moderToken == "" || time.Now().Second()-lastUpdateModerToken > 3600*6 {
 		lastUpdateModerToken = time.Now().Second()
 		moderToken = yandexGetIamToken()
 	}
@@ -300,13 +341,17 @@ func moderationImg (img []byte) (map[string]float32, error) {
 		"Authorization": "Bearer " + moderToken,
 	}
 
-	resp, err := requestsPost("https://vision.api.cloud.yandex.net/vision/v1/batchAnalyze", nil, head, []byte(data), )
-	if err != nil {return nil, err}
+	resp, err := requestsPost("https://vision.api.cloud.yandex.net/vision/v1/batchAnalyze", nil, head, []byte(data))
+	if err != nil {
+		return nil, err
+	}
 
 	var results ModerationFields
 
 	err = json.Unmarshal(resp, &results)
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 
 	response := make(map[string]float32)
 
@@ -322,18 +367,24 @@ func moderationImg (img []byte) (map[string]float32, error) {
 	return response, nil
 }
 
+func RandSleep(randTime, addTime int) {
+	randSleep(randTime, addTime)
+}
+
 func randSleep(randTime, addTime int) {
-	r := rand.Intn(randTime*100)+1
-	t := time.Second / 100 * time.Duration(r) + time.Second * time.Duration(addTime)
+	rand.Seed(time.Now().UnixNano())
+	r := rand.Intn(randTime*100) + 1
+	t := time.Second/100*time.Duration(r) + time.Second*time.Duration(addTime)
 	time.Sleep(t)
 	return
 }
 
 func randChoice(list []string) string {
+	rand.Seed(time.Now().UnixNano())
 	return list[rand.Intn(len(list))]
 }
 
-func logs(str... string) bool {
+func logs(str ...string) bool {
 	content := ""
 	name := "log"
 
@@ -346,10 +397,10 @@ func logs(str... string) bool {
 
 	content = content + "\n"
 
-	file, err := os.OpenFile("logs/" + name + ".txt", os.O_APPEND|os.O_WRONLY, 0600)
+	file, err := os.OpenFile("logs/"+name+".txt", os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		fmt.Println(err)
-		writeNewFileTxt("logs/" + name + ".txt", content)
+		writeNewFileTxt("logs/"+name+".txt", content)
 		return false
 	}
 	defer file.Close()
@@ -368,7 +419,9 @@ func logsErr(err error) {
 }
 
 func IsIn(str string, list []string) bool {
-	if list != nil { return false }
+	if list != nil {
+		return false
+	}
 
 	for index := range list {
 		if str == list[index] {
@@ -392,21 +445,20 @@ func st(i int) string {
 }
 
 func isRand(v float32) bool {
-	return rand.Float32() * 100 < v
+	rand.Seed(time.Now().UnixNano())
+	return rand.Float32()*100 < v
 }
 
-
-
 type RE struct {
-	compile map[string]*regexp.Regexp
+	compile  map[string]*regexp.Regexp
 	muGlobal *sync.Mutex
 }
 
 func InitRE(muGlobal *sync.Mutex) *RE {
 	return &RE{
-		compile: make(map[string]*regexp.Regexp, 1000),
+		compile:  make(map[string]*regexp.Regexp, 1000),
 		muGlobal: muGlobal,
-		}
+	}
 }
 
 func (self *RE) FindAllBetween(Str *[]byte, str1, str2 string) []string {
@@ -429,11 +481,11 @@ func (self *RE) FindAllBetween(Str *[]byte, str1, str2 string) []string {
 	compiledString, ok = self.compile[str]
 	self.muGlobal.Unlock()
 
-	if !ok{
+	if !ok {
 		compiledString, err = regexp.Compile(str)
 		if err != nil {
 			fmt.Println(err)
-			time.Sleep(time.Second*10)
+			time.Sleep(time.Second * 10)
 		}
 		self.muGlobal.Lock()
 		self.compile[str] = compiledString
@@ -444,7 +496,7 @@ func (self *RE) FindAllBetween(Str *[]byte, str1, str2 string) []string {
 
 	for _, val := range findStrings {
 		lenX = len(val)
-		x = val[lenStr1:lenX - lenStr2]
+		x = val[lenStr1 : lenX-lenStr2]
 		finalEditStrings = append(finalEditStrings, x)
 	}
 
@@ -470,11 +522,11 @@ func (self *RE) FindAllBetweenStr(sourceStr, str1, str2 string) []string {
 	compiledString, ok = self.compile[str]
 	self.muGlobal.Unlock()
 
-	if !ok{
+	if !ok {
 		compiledString, err = regexp.Compile(str)
 		if err != nil {
 			fmt.Println(err)
-			time.Sleep(time.Second*10)
+			time.Sleep(time.Second * 10)
 		}
 
 		self.muGlobal.Lock()
@@ -486,7 +538,7 @@ func (self *RE) FindAllBetweenStr(sourceStr, str1, str2 string) []string {
 
 	for _, val := range findStrings {
 		lenX = len(val)
-		x = val[lenStr1:lenX - lenStr2]
+		x = val[lenStr1 : lenX-lenStr2]
 		finalEditStrings = append(finalEditStrings, x)
 	}
 
@@ -503,7 +555,7 @@ func (self *RE) Check(sourceStr, pattern string) bool {
 	compiledString, ok = self.compile[pattern]
 	self.muGlobal.Unlock()
 
-	if !ok{
+	if !ok {
 		compiledString, err = regexp.Compile(pattern)
 		if err != nil {
 			fmt.Println("error in Check", err, sourceStr, pattern)
@@ -517,39 +569,40 @@ func (self *RE) Check(sourceStr, pattern string) bool {
 	return compiledString.MatchString(sourceStr)
 }
 
-
-
-func getUserInfoFromApi(userIds... string) (*[]UserInfoFields, error) {
+func getUserInfoFromApi(userIds ...string) (*[]UserInfoFields, error) {
 	var fin []UserInfoFields
 	var users []string
 
-	for x:=0;x<len(userIds);x+=1000 {
+	for x := 0; x < len(userIds); x += 1000 {
 		users = userIds[x:]
-		if len(users) > 1000 { users = users[:1000] }
+		if len(users) > 1000 {
+			users = users[:1000]
+		}
 
 		form := url.Values{
-			"v": {vApi},
-			"access_token": {TOKEN_GROUP},
-			"fields": {"photo_200,last_seen"},
-			"user_ids": {strings.Join(users, ",")},
+			"v":            {vApi},
+			"access_token": {configs.TOKEN_GROUP},
+			"fields":       {"photo_200,last_seen"},
+			"user_ids":     {strings.Join(users, ",")},
 		}
-		res, err := postForm(urlVk + "users.get", form)
+		res, err := postForm(urlVk+"users.get", form)
 		if err != nil {
 			return &[]UserInfoFields{}, err
 		}
 
 		var response UserInfo
 		err = json.Unmarshal(res, &response)
-		if err != nil || len(response.Response) == 0 { return &[]UserInfoFields{}, err }
+		if err != nil || len(response.Response) == 0 {
+			return &[]UserInfoFields{}, err
+		}
 
 		for index := range response.Response {
 			fin = append(fin, response.Response[index])
 		}
-		time.Sleep(time.Millisecond*100)
+		time.Sleep(time.Millisecond * 100)
 	}
 	return &fin, nil
 }
-
 
 func jsInt(b []byte, q ...string) (int, error) {
 	var err error
@@ -641,21 +694,17 @@ func dBackSlash(b []byte) []byte {
 	p := []byte(`\`)[0]
 	t := make([]byte, 0, len(b))
 	for i := range b {
-		if (b[i] == p && b[i + 1] == p) || b[i] != p {
+		if (b[i] == p && b[i+1] == p) || b[i] != p {
 			t = append(t, b[i])
 		}
 	}
 	return t
 }
 
-
-
 func fm(f string, v ...interface{}) string {
 	//форматирование
 	return fmt.Sprintf(f, v...)
 }
-
-
 
 type Js struct {
 	data []byte
@@ -665,10 +714,12 @@ func NewJs(b []byte) *Js {
 	return &Js{b}
 }
 
-func (j *Js) Get (q string) string {
+func (j *Js) Get(q string) string {
 	r, err := jsAsByte(j.data, q)
-	if err!= nil {
-		if DEBUG { logsErr(err) }
+	if err != nil {
+		if configs.DEBUG {
+			logsErr(err)
+		}
 		return ""
 	}
 	return string(delBackSlash(r))
@@ -676,17 +727,18 @@ func (j *Js) Get (q string) string {
 
 func (j *Js) Int(q string) int {
 	r, err := jsInt(j.data, q)
-	if err!= nil {
-		if DEBUG { logsErr(err) }
+	if err != nil {
+		if configs.DEBUG {
+			logsErr(err)
+		}
 		return 0
 	}
 	return r
 }
 
-
 type JsArray struct {
 	data []byte
-	len int
+	len  int
 }
 
 func NewJsArray(b []byte) *JsArray {
@@ -694,10 +746,12 @@ func NewJsArray(b []byte) *JsArray {
 	return &JsArray{b, len(l)}
 }
 
-func (j *JsArray) Get (index int) string {
+func (j *JsArray) Get(index int) string {
 	r, err := jsAsByte(j.data, fm("[%d]", index))
-	if err!= nil {
-		if DEBUG { logsErr(err) }
+	if err != nil {
+		if configs.DEBUG {
+			logsErr(err)
+		}
 		return ""
 	}
 	return string(delBackSlash(r))
@@ -705,17 +759,17 @@ func (j *JsArray) Get (index int) string {
 
 func (j *JsArray) Int(index int) int {
 	r, err := jsInt(j.data, fm("[%d]", index))
-	if err!= nil {
-		if DEBUG { logsErr(err) }
+	if err != nil {
+		if configs.DEBUG {
+			logsErr(err)
+		}
 		return 0
 	}
 	return r
 }
 
-
 var ruDict = []rune("ёйцукенгшщзхъфывапролджэячсмитьбю")
 var enDict = []rune("QWERTYUIOPASDFGHJKLZXCVBNMqertyui")
-
 
 func enc(v string) string {
 	w := make([]rune, 0, 100)
@@ -724,8 +778,18 @@ func enc(v string) string {
 	in := 0
 	for _, i := range q {
 		sw = false
-		for ind, x := range ruDict { in = ind; if i == x { sw = true; break } }
-		if sw { w = append(w, enDict[in]) } else { w = append(w, i) }
+		for ind, x := range ruDict {
+			in = ind
+			if i == x {
+				sw = true
+				break
+			}
+		}
+		if sw {
+			w = append(w, enDict[in])
+		} else {
+			w = append(w, i)
+		}
 	}
 	return string(w)
 }
@@ -737,14 +801,23 @@ func dec(v string) string {
 	in := 0
 	for _, i := range q {
 		sw = false
-		for ind, x := range enDict { in = ind; if i == x { sw = true; break } }
-		if sw { w = append(w, ruDict[in]) } else { w = append(w, i) }
+		for ind, x := range enDict {
+			in = ind
+			if i == x {
+				sw = true
+				break
+			}
+		}
+		if sw {
+			w = append(w, ruDict[in])
+		} else {
+			w = append(w, i)
+		}
 	}
 	return string(w)
 }
 
-
-func finder (b []byte, str1, str2 string, count int) []string {
+func finder(b []byte, str1, str2 string, count int) []string {
 	r := make([]string, 0, 15)
 	var a, y, i, c int
 
@@ -754,20 +827,20 @@ func finder (b []byte, str1, str2 string, count int) []string {
 	a = -1
 	switcher := true
 
-	for i <= len(b) - 1 {
+	for i <= len(b)-1 {
 		if y == 0 && b[i] == s1[0] && switcher {
 			if len(s1) == 1 {
 				a = i
 				switcher = false
 				i++
 			} else {
-				for x:=1; x < len(s1); x++ {
+				for x := 1; x < len(s1); x++ {
 					i++
 					if b[i] != s1[x] {
 						a = -1
 						break
 					}
-					if x == len(s1) - 1 {
+					if x == len(s1)-1 {
 						a = i
 						switcher = false
 						i++
@@ -780,13 +853,13 @@ func finder (b []byte, str1, str2 string, count int) []string {
 				y = i - 1
 				switcher = true
 			} else {
-				for x:=1; x < len(s2); x++ {
+				for x := 1; x < len(s2); x++ {
 					i++
 					if b[i] != s2[x] {
 						y = 0
 						break
 					}
-					if x == len(s2) - 1 {
+					if x == len(s2)-1 {
 						y = i - len(s2)
 						switcher = true
 					}
@@ -797,19 +870,20 @@ func finder (b []byte, str1, str2 string, count int) []string {
 			r = append(r, string(b[a+1:y+1]))
 			a, y = -1, 0
 			c++
-			if c == count { break }
+			if c == count {
+				break
+			}
 		}
 		i++
 	}
 	return r
 }
 
-func finderFirst (b []byte, str1, str2 string) string {
+func finderFirst(b []byte, str1, str2 string) string {
 	r := finder(b, str1, str2, 1)
-	if len(r) == 0 { return "" }
+	if len(r) == 0 {
+		return ""
+	}
 	return r[0]
 
-
 }
-
-
