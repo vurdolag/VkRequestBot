@@ -1,4 +1,4 @@
-package vksession
+package server
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func RunServer() {
+func Run() {
 	http.HandleFunc("/", handler)
 	_ = http.ListenAndServe(":6060", nil)
 }

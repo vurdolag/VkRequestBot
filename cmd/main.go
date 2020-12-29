@@ -2,6 +2,7 @@ package main
 
 import (
 	vksession "VkRequestBot/internal"
+	server "VkRequestBot/internal/server"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -70,6 +71,8 @@ func bot() {
 	s := strings.ReplaceAll(string(res), "\",", "\",\n")
 
 	vksession.WriteFile("newAkk.json", s)
+
+	go server.Run()
 }
 
 /*
