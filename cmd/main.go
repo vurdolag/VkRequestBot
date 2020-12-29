@@ -22,10 +22,9 @@ var listClub = []string{
 }
 
 func bot() {
-	conf, _ := configs.New(*confPath)
-	go server.Run(conf)
-
 	rand.Seed(time.Now().UnixNano())
+
+	conf, _ := configs.New(*confPath)
 
 	muGlobal := new(sync.Mutex)
 	re := vk.InitRE(muGlobal)
@@ -34,10 +33,18 @@ func bot() {
 	dataResponse := vk.InitDataResponse(muGlobal)
 	accounts := vk.LoadAccount(conf)
 
+	vkSessions := make([]*vk.VkSession, 0, len(accounts))
+
 	for _, acc := range accounts {
 		v := vk.InitVkSession(acc, re, dataResponse, muGlobal, conf)
-		a := v.Auth()
+		vkSessions = append(vkSessions, v)
+	}
 
+	go server.Run(vkSessions, conf)
+
+	for _, v := range vkSessions {
+		vk.RandSleep(10, 3)
+		a := v.Auth()
 		if !a {
 			continue
 		}
@@ -51,9 +58,10 @@ func bot() {
 		go act.Reposter(listClub, "", false, 10, 10, 66, "30688695")
 		go act.RandomLikeFeed()
 
-		//vksession.RandSleep(90, 30)
+		vk.RandSleep(90, 30)
 		break
 	}
+
 }
 
 func main() {

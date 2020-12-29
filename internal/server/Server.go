@@ -2,7 +2,7 @@ package server
 
 import (
 	"VkRequestBot/configs"
-	"VkRequestBot/internal/vksession"
+	"VkRequestBot/internal/vk"
 	"fmt"
 	"net/http"
 )
@@ -18,7 +18,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	write(w, "ping")
 }
 
-func Run(vkSessions []vksession.VkSession, conf configs.ConfI) {
+func Run(vkSessions []*vk.VkSession, conf configs.ConfI) {
 	http.HandleFunc("/", handler)
 	_ = http.ListenAndServe(":"+conf.GetPort(), nil)
 }
