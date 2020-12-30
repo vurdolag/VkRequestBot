@@ -9,10 +9,13 @@ import (
 	"time"
 )
 
+var loop = NewLoop()
+
 func InitAction(vk *VkSession, data *DataAnswer, bd *DataBase) *Action {
 	act := new(Action)
 	act.bd = bd
 	act.vk = vk
+	act.loop = loop
 	act.myGroupList = make([]string, 0, 150)
 	b := new(BotAnswer)
 	b.vk = vk
@@ -24,12 +27,19 @@ func InitAction(vk *VkSession, data *DataAnswer, bd *DataBase) *Action {
 }
 
 type Action struct {
-	vk  *VkSession
-	Bot *BotAnswer
-	bd  *DataBase
+	vk   *VkSession
+	Bot  *BotAnswer
+	bd   *DataBase
+	loop *Loop
 
 	myGroupList      []string
 	alreadyDelDialog []int
+}
+
+func (self *Action) Add(f func(p *Params), rnd, add float32, p *Params) {
+	if self.vk.methods.working {
+		self.loop.add(NewTask(f, randFloat(rnd, add), p))
+	}
 }
 
 func (self *Action) eventProcessing(event *Event) *Event {
@@ -67,9 +77,7 @@ func (self *Action) eventProcessing(event *Event) *Event {
 
 func (self *Action) LongPool() {
 	go self.vk.methods.LongPoll(self)
-	randSleep(15, 5)
-	go self.vk.methods.setOnline()
-	randSleep(15, 5)
+	randSleep(15, 1)
 	go self.vk.methods.LongPollFeed(self)
 }
 
@@ -170,44 +178,39 @@ func (self *Action) acceptOrDeclineNewFriend() error {
 	return nil
 }
 
-func (self *Action) CheckFriends() {
-	randSleep(600, 180)
-	for self.vk.methods.working {
-		err := self.acceptOrDeclineNewFriend()
-		if err != nil {
-			self.vk.logsErr(err)
-		}
-		randSleep(3600, 1800)
-	}
+func (self *Action) Online(p *Params) {
+	self.vk.methods.setOnline()
+	self.Add(self.Online, 240, 180, p)
 }
 
-func (self *Action) DelOutRequests(toBlackList bool) {
-	randSleep(600, 180)
-	for self.vk.methods.working {
-		err := self.vk.methods.DelOutRequests(toBlackList)
-		if err != nil {
-			self.vk.logsErr(err)
-		}
-		randSleep(7200, 3600)
+func (self *Action) CheckFriends(p *Params) {
+	err := self.acceptOrDeclineNewFriend()
+	if err != nil {
+		self.vk.logsErr(err)
 	}
+	self.Add(self.CheckFriends, 3600, 1800, p)
 }
 
-func (self *Action) Reposter(targets []string, msg string, fromGroup bool,
-	rndRepost, rndLike, rndTarget float32, targetGroup string) {
+func (self *Action) DelOutRequests(p *Params) {
+	err := self.vk.methods.DelOutRequests(p.ToBlackList)
+	if err != nil {
+		self.vk.logsErr(err)
+	}
+	self.Add(self.DelOutRequests, 7200, 3600, p)
+}
 
-	randSleep(600, 180)
-	for self.vk.methods.working {
-		self.vk.log("reposter start")
+func (self *Action) Reposter(p *Params) {
+	self.vk.log("reposter start")
+	func() {
 		likeFrom := "feed_recent"
 		groupId := ""
-		if fromGroup {
+		if p.FromGroup {
 			likeFrom = "wall_page"
 			if len(self.myGroupList) == 0 {
 				groups, err := self.vk.methods.getGroups(self.vk.MyId)
 				if err != nil {
 					self.vk.logsErr(err)
-					randSleep(600, 300)
-					continue
+					return
 				}
 
 				for _, i := range *groups {
@@ -216,15 +219,14 @@ func (self *Action) Reposter(targets []string, msg string, fromGroup bool,
 			}
 			l := len(self.myGroupList)
 			groupId = fm("club%s", self.myGroupList[rand.Intn(l)][1:])
-			targets = []string{groupId}
+			p.Targets = []string{groupId}
 		}
 
-		//club53454
-		target := targets[rand.Intn(len(targets))]
+		target := p.Targets[rand.Intn(len(p.Targets))]
 		postIds, err := self.vk.methods.getPostFrom(target, nil, rand.Intn(10)+10)
 		if err != nil {
 			self.vk.logsErr(err)
-			continue
+			return
 		}
 		if len(postIds) != 0 {
 			postID := postIds[0][0]
@@ -246,10 +248,11 @@ func (self *Action) Reposter(targets []string, msg string, fromGroup bool,
 					self.vk.methods.viewPost(t, []string{}, 40)
 				}
 
-				if isRand(rndRepost) {
-					self.vk.methods.Repost(postID, msg)
+				if isRand(p.RndRepost) {
+					self.vk.methods.Repost(postID, p.Message)
 				} else {
-					if isRand(rndLike) || targetGroup != "" && (strings.Contains(postID, groupId) && isRand(rndTarget)) {
+					is := strings.Contains(postID, groupId) && isRand(p.RndTarget)
+					if isRand(p.RndLike) || p.TargetGroup != "" && is {
 						self.vk.methods.Like(postID, postIds[0][1], likeFrom)
 					} else {
 						self.vk.logs("reposter loss...")
@@ -257,20 +260,17 @@ func (self *Action) Reposter(targets []string, msg string, fromGroup bool,
 				}
 			}
 		}
-		randSleep(3200, 1200)
-	}
+	}()
+	self.Add(self.Reposter, 3600, 1800, p)
 }
 
-func (self *Action) RandomLikeFeed() {
-	randSleep(600, 180)
-	for self.vk.methods.working {
-		self.vk.log("random like feed start")
-
+func (self *Action) RandomLikeFeed(p *Params) {
+	self.vk.log("random like feed start")
+	func() {
 		likeFeed, err := self.vk.methods.getPostFrom("", nil, rand.Intn(9)+7)
 		if err != nil || len(likeFeed) == 0 {
 			self.vk.logsErr(err)
-			randSleep(1200, 300)
-			continue
+			return
 		}
 
 		randSleep(20, 10)
@@ -279,8 +279,7 @@ func (self *Action) RandomLikeFeed() {
 
 		if len(post) != 2 {
 			self.vk.log("error post len != 2")
-			randSleep(1200, 300)
-			continue
+			return
 		}
 
 		postId := post[0]
@@ -296,21 +295,19 @@ func (self *Action) RandomLikeFeed() {
 		randSleep(25, 10)
 
 		self.vk.methods.Like(postId, hashLike, "feed_recent")
+	}()
 
-		randSleep(3200, 1800)
-	}
+	self.Add(self.RandomLikeFeed, 3600, 1800, p)
 }
 
-func (self *Action) DelDogAndPornFromFriends(lastSeen int) {
-	randSleep(600, 180)
-	for self.vk.methods.working {
+func (self *Action) DelBadFriends(p *Params) {
+	func() {
 		self.vk.logs("Запуск удаления собак и непристойных юзеров")
 
 		friendList, err := self.vk.methods.getFriends(self.vk.MyId)
 		if err != nil {
 			self.vk.logsErr(err)
-			randSleep(900, 600)
-			continue
+			return
 		}
 
 		friend := *friendList
@@ -345,7 +342,7 @@ func (self *Action) DelDogAndPornFromFriends(lastSeen int) {
 				flag = 1
 			}
 
-			if lastSeen != -1 && int(time.Now().Unix())-info[index].Last_seen.Time > lastSeen {
+			if p.LastSeen > 0 && int(time.Now().Unix())-info[index].Last_seen.Time > p.LastSeen {
 				flag = 1
 			}
 
@@ -361,9 +358,8 @@ func (self *Action) DelDogAndPornFromFriends(lastSeen int) {
 			}
 		}
 		self.vk.logs(fm("Удалено друзей: %d из %d", count, len(info)))
-
-		randSleep(7200, 3600)
-	}
+	}()
+	self.Add(self.DelBadFriends, 7200, 3600, p)
 }
 
 func InitAnswerDataBase(conf configs.ConfI) *DataAnswer {
@@ -434,8 +430,10 @@ func (self *BotAnswer) answer(event *Event) *Event {
 
 	if maxAnswer > self.maxCountAnswer {
 		self.vk.log(event.fromId, maxAnswer, "MAX <-", event.text)
-		event.empty = true
-		return event
+		if isRand(85) {
+			event.empty = true
+			return event
+		}
 	}
 
 	//if event.attachment
@@ -443,6 +441,11 @@ func (self *BotAnswer) answer(event *Event) *Event {
 	//message_text, english = await self.is_english(message_text, event.from_id)
 
 	targetAnswer, _ := self.getAnswer(event)
+
+	if targetAnswer == "" {
+		event.empty = true
+		return event
+	}
 
 	targetAnswer = self.insertName(st(event.fromId), targetAnswer)
 

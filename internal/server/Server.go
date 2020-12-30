@@ -4,7 +4,9 @@ import (
 	"VkRequestBot/configs"
 	"VkRequestBot/internal/vk"
 	"fmt"
+	"math/rand"
 	"net/http"
+	"time"
 )
 
 func write(w http.ResponseWriter, msg string) {
@@ -19,6 +21,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func Run(vkSessions []*vk.VkSession, conf configs.ConfI) {
+	rand.Seed(time.Now().UnixNano())
 	http.HandleFunc("/", handler)
 	_ = http.ListenAndServe(":"+conf.GetPort(), nil)
 }

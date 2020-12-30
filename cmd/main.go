@@ -21,51 +21,60 @@ var listClub = []string{
 	"club174587092",
 }
 
-func bot() {
-	rand.Seed(time.Now().UnixNano())
-
+func bot(w *sync.WaitGroup) {
 	conf, _ := configs.New(*confPath)
 
 	muGlobal := new(sync.Mutex)
 	re := vk.InitRE(muGlobal)
 	bd := vk.InitDataBase(muGlobal)
-	dataAnswer := vk.InitAnswerDataBase(conf)
-	dataResponse := vk.InitDataResponse(muGlobal)
+	answer := vk.InitAnswerDataBase(conf)
+	resp := vk.InitDataResponse(muGlobal)
 	accounts := vk.LoadAccount(conf)
 
 	vkSessions := make([]*vk.VkSession, 0, len(accounts))
 
 	for _, acc := range accounts {
-		v := vk.InitVkSession(acc, re, dataResponse, muGlobal, conf)
-		vkSessions = append(vkSessions, v)
+		session := vk.InitVkSession(acc, re, resp, muGlobal, conf, w)
+		vkSessions = append(vkSessions, session)
 	}
 
 	go server.Run(vkSessions, conf)
 
-	for _, v := range vkSessions {
-		vk.RandSleep(10, 3)
-		a := v.Auth()
+	p := &vk.Params{}
+	p1 := &vk.Params{ToBlackList: true}
+	p3 := &vk.Params{LastSeen: 3600 * 24 * 14}
+	p4 := &vk.Params{
+		Targets:     listClub,
+		TargetGroup: "30688695",
+		RndRepost:   10,
+		RndLike:     10,
+		RndTarget:   66,
+	}
+
+	for _, session := range vkSessions {
+		a := session.Auth()
 		if !a {
 			continue
 		}
 
-		act := vk.InitAction(v, dataAnswer, bd)
+		act := vk.InitAction(session, answer, bd)
+		act.LongPool()
 
-		go act.LongPool()
-		go act.CheckFriends()
-		go act.DelOutRequests(true)
-		go act.DelDogAndPornFromFriends(3600 * 24 * 14)
-		go act.Reposter(listClub, "", false, 10, 10, 66, "30688695")
-		go act.RandomLikeFeed()
+		act.Add(act.Online, 1, 180, p)
+		act.Add(act.CheckFriends, 900, 120, p)
+		act.Add(act.DelOutRequests, 900, 120, p1)
+		act.Add(act.DelBadFriends, 900, 120, p3)
+		act.Add(act.Reposter, 900, 120, p4)
+		act.Add(act.RandomLikeFeed, 900, 120, p)
 
-		vk.RandSleep(90, 30)
-		break
+		vk.RandSleep(50, 10)
 	}
-
 }
 
 func main() {
-	time.Sleep(time.Second * 2)
-	bot()
-	time.Sleep(time.Second * 100000000)
+	rand.Seed(time.Now().UnixNano())
+	vk.RandSleep(1, 1)
+	w := new(sync.WaitGroup)
+	bot(w)
+	w.Wait()
 }

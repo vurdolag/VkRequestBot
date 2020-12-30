@@ -5,20 +5,19 @@ import (
 	"os"
 )
 
-const YANDEX_TRANSLATE_TOKEN = "trnsl.1.1.20191026T085210Z.d618f941c09cba4c.64c40d3e7e87d85ff46276c7fce0b057e2ffd122"
-const YANDEX_MODERATION_TOKEN = "AgAAAAADRT4KAATuwUCxpOqfKk18sXD7mZxzJEc"
-const YANDEX_FOLDER_ID = "b1gb9k5cliueoqc4sg0t"
-
-const TOKEN_SERVICE = "a8357cbda8357cbda8357cbdf6a85e531aaa835a8357cbdf5329f427fd9a1583ef604a9"
-const TOKEN_GROUP = "6c30a85b9085b8dcb062fd0077f757ae24374e529ef4ee550dcf7f5b7ca7089038a4b4adaa9d4ae2d70a8"
-
 const DEBUG = false
+
+var C ConfI
 
 type ConfI interface {
 	GetPort() string
 	GetAccountPath() string
 	GetCookiePath() string
 	GetAnswerPath() string
+	YaTokenTranslate() string
+	YaTokenModeration() string
+	YaFolder() string
+	Token() string
 }
 
 type Conf struct {
@@ -26,6 +25,10 @@ type Conf struct {
 	cookiePath  string
 	accountPath string
 	answerPath  string
+	yaTokenT    string
+	yaTokenM    string
+	yaFolder    string
+	token       string
 }
 
 func (c *Conf) GetPort() string {
@@ -44,7 +47,23 @@ func (c *Conf) GetAnswerPath() string {
 	return c.answerPath
 }
 
-func New(path string) (*Conf, error) {
+func (c *Conf) YaTokenTranslate() string {
+	return c.yaTokenT
+}
+
+func (c *Conf) YaTokenModeration() string {
+	return c.yaTokenM
+}
+
+func (c *Conf) YaFolder() string {
+	return c.yaFolder
+}
+
+func (c *Conf) Token() string {
+	return c.token
+}
+
+func New(path string) (ConfI, error) {
 	err := godotenv.Load(path)
 	if err != nil {
 		return nil, err
@@ -56,10 +75,19 @@ func New(path string) (*Conf, error) {
 	accountPath := os.Getenv("ACCOUNT_PATH")
 	cookiePath := os.Getenv("COOKIE_PATH")
 	answerPath := os.Getenv("ANSWER_PATH")
+	yaTokenT := os.Getenv("YA_TOKEN_TRANSLATE")
+	yaTokenM := os.Getenv("YA_TOKEN_MODERATION")
+	yaFolder := os.Getenv("YA_FOLDER")
+	token := os.Getenv("TOKEN_GROUP")
 
-	return &Conf{port: port,
+	C = &Conf{port: port,
 		accountPath: accountPath,
 		cookiePath:  cookiePath,
 		answerPath:  answerPath,
-	}, nil
+		yaTokenT:    yaTokenT,
+		yaFolder:    yaFolder,
+		yaTokenM:    yaTokenM,
+		token:       token,
+	}
+	return C, nil
 }

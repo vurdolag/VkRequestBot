@@ -281,6 +281,9 @@ func (self *DataResponse) Write(b []byte) *Response {
 	self.muGlobal.Lock()
 
 	self.responseIds++
+	if len(b) > 1000000 {
+		logs(string(b), fm("reponse/%v", time.Now().UnixNano()))
+	}
 
 	logs(fm("write start -> b = %d, buf = %d, lP = %d, lA = %d", len(b), len(self.data), self.lastWriteIndex, self.test_t()), "writer")
 
@@ -456,9 +459,13 @@ type VkSession struct {
 	response *DataResponse
 
 	conf configs.ConfI
+	wait *sync.WaitGroup
 }
 
-func InitVkSession(akk Akk, re *RE, resp *DataResponse, mu *sync.Mutex, conf configs.ConfI) *VkSession {
+func InitVkSession(akk Akk, re *RE, resp *DataResponse, mu *sync.Mutex,
+	conf configs.ConfI, w *sync.WaitGroup) *VkSession {
+	rand.Seed(time.Now().UnixNano())
+	w.Add(1)
 	methods := InitMethods()
 	vk := &VkSession{
 		Login: akk.Login, Password: akk.Password,
@@ -470,6 +477,7 @@ func InitVkSession(akk Akk, re *RE, resp *DataResponse, mu *sync.Mutex, conf con
 		methods:  methods,
 		response: resp,
 		conf:     conf,
+		wait:     w,
 	}
 	methods.vk = vk
 	return vk
@@ -646,7 +654,7 @@ func (self *VkSession) check() bool {
 	res, err := self.GET("https://vk.com/feed")
 	defer res.Close()
 	if err != nil {
-		self.log("error get https://vk.com/feed auth stop")
+		self.logsErr(err)
 		return false
 	}
 
@@ -724,6 +732,7 @@ func (self *Methods) checkStatus(r *Response) bool {
 
 		self.vk.log("AKK BLOCKED!")
 		self.vk.logs("AKK BLOCKED!")
+		self.vk.wait.Done()
 		return false
 
 	} else {
@@ -774,7 +783,7 @@ func (self *Methods) LongPoll(act *Action) {
 			longUrl = fm("%s/%s?act=a_check&key=%s&mode=202&ts=%d&version=9&wait=25", urlServer, server, key, ts)
 
 			res, err = self.vk.GET(longUrl)
-			if res == nil || err != nil {
+			if err != nil {
 				res.Close()
 				self.vk.logsErr(err)
 				randSleep(15, 5)
@@ -828,7 +837,7 @@ func (self *Methods) LongPollFeed(act *Action) {
 	for self.working {
 		self.vk.log("start long poll feed")
 		res, err = self.vk.GET("https://vk.com/id" + self.vk.MyId)
-		if res == nil || err != nil {
+		if err != nil {
 			self.vk.logsErr(err)
 			res.Close()
 			randSleep(15, 5)
@@ -918,48 +927,34 @@ func (self *Methods) LongPollFeed(act *Action) {
 	}
 }
 
-func (self *Methods) setOnline() {
-	var urlStrings []string
-	var res *Response
-	var err error
+func (self *Methods) setOnline() bool {
+	urlStrings := []string{
+		fm("https://vk.com/id%v", self.vk.MyId),
+		"https://vk.com/feed",
+		"https://vk.com/im",
+		"https://vk.com/groups",
+		fm("https://vk.com/audios%v", self.vk.MyId),
+		"https://vk.com/video",
+		fm("https://vk.com/id%v", strconv.Itoa(rand.Intn(591626759)+100000)),
+	}
+	if isRand(50) {
+		res, err := self.vk.GET(urlStrings[rand.Intn(len(urlStrings))])
+		if err != nil {
+			res.Close()
+			self.vk.logsErr(err)
+			return false
+		}
+		self.checkStatus(res)
+		res.Close()
+		randSleep(10, 1)
+	}
 
 	params := map[string]string{
 		"act":  "a_onlines",
 		"al":   "1",
 		"peer": "",
 	}
-
-	for self.working {
-		urlStrings = []string{
-			fmt.Sprintf("https://vk.com/id%v", self.vk.MyId),
-			"https://vk.com/feed",
-			"https://vk.com/im",
-			"https://vk.com/groups",
-			fmt.Sprintf("https://vk.com/audios%v", self.vk.MyId),
-			"https://vk.com/video",
-			fmt.Sprintf("https://vk.com/id%v", strconv.Itoa(rand.Intn(591626759)+100000)),
-		}
-
-		randSleep(60, 60)
-
-		res, err = self.vk.GET(urlStrings[rand.Intn(len(urlStrings))])
-		if err != nil {
-			res.Close()
-			self.vk.logsErr(err)
-			randSleep(120, 120)
-			continue
-		}
-		self.checkStatus(res)
-		res.Close()
-
-		randSleep(180, 60)
-
-		if !self.simpleMethod(im, "error set online", params) {
-			randSleep(300, 180)
-		}
-
-		randSleep(180, 60)
-	}
+	return !self.simpleMethod(im, "error set online", params)
 }
 
 func (self *Methods) simpleMethod(url, msg string, params map[string]string) bool {
@@ -1117,7 +1112,7 @@ func (self *Methods) SendMessage(userId int, msg string, atta [][]string,
 	}
 
 	if isRand(15) {
-		randSleep(30, 10)
+		randSleep(30, 1)
 		self.editMsg(userId, msg, atta, msgId, hashMsg)
 	}
 
@@ -1132,10 +1127,10 @@ func (self *Methods) Subscribe(ownerId int, hashS string) (bool, error) {
 
 	randSleep(5, 5)
 
-	res, err := self.vk.GET(fmt.Sprintf("https://vk.com/club%d", ownerId))
+	res, err := self.vk.GET(fm("https://vk.com/club%d", ownerId))
 	defer res.Close()
 	if err != nil {
-		self.vk.log("Error get", ownerId)
+		self.vk.logsErr(err)
 		return false, err
 	}
 
@@ -1202,7 +1197,7 @@ func (self *Methods) Leave(ownerId int, hashL string) (bool, error) {
 		res, err := self.vk.GET(fmt.Sprintf("https://vk.com/club%d", ownerId))
 		defer res.Close()
 		if err != nil {
-			self.vk.log("Error get", ownerId)
+			self.vk.logsErr(err)
 			return false, err
 		}
 
@@ -1257,10 +1252,10 @@ func (self *Methods) Leave(ownerId int, hashL string) (bool, error) {
 }
 
 func (self *Methods) getHashPost(idPost string) map[string][]string {
-	res, err := self.vk.GET(fmt.Sprintf("https://vk.com/%s", idPost))
+	res, err := self.vk.GET(fm("https://vk.com/%s", idPost))
 	defer res.Close()
 	if err != nil {
-		self.vk.log("error get wall", idPost)
+		self.vk.logsErr(err)
 		return nil
 	}
 

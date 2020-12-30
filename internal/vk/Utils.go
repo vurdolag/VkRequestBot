@@ -185,11 +185,18 @@ func postForm(targetUrl string, form url.Values) ([]byte, error) {
 func LoadAccount(conf configs.ConfI) []Akk {
 	file, _ := LoadFile(conf.GetAccountPath())
 	var v []Akk
+
 	err := json.Unmarshal(file, &v)
 	if err != nil {
 		fmt.Println("json", err)
 	}
-	return v
+
+	o := make([]Akk, len(v), len(v))
+	for x, i := range rand.Perm(len(v)) {
+		o[x] = v[i]
+	}
+
+	return o
 }
 
 func LoadFile(path string) ([]byte, error) {
@@ -232,7 +239,7 @@ func writeNewFileTxt(path, source string) bool {
 
 func translate(text string, lang string) string {
 	params := map[string]string{
-		"key":  configs.YANDEX_TRANSLATE_TOKEN,
+		"key":  configs.C.YaTokenTranslate(),
 		"text": url.QueryEscape(text),
 		"lang": lang,
 	}
@@ -304,7 +311,7 @@ func checkText(text string) string {
 
 func yandexGetIamToken() string {
 	params := map[string]string{
-		"yandexPassportOauthToken": configs.YANDEX_MODERATION_TOKEN,
+		"yandexPassportOauthToken": configs.C.YaTokenModeration(),
 	}
 	body, err := postFileFromJson("https://iam.api.cloud.yandex.net/iam/v1/tokens", params, nil)
 
@@ -320,7 +327,7 @@ func yandexGetIamToken() string {
 }
 
 func moderationImg(img []byte) (map[string]float32, error) {
-	data := `{"folderId": "` + configs.YANDEX_FOLDER_ID + `","analyze_specs": [{"content":"` +
+	data := `{"folderId": "` + configs.C.YaFolder() + `","analyze_specs": [{"content":"` +
 		base64.StdEncoding.EncodeToString(img) +
 		`","features": [{"type": "CLASSIFICATION","classificationConfig": {"model": "moderation"}}]}]}`
 
@@ -364,7 +371,6 @@ func RandSleep(randTime, addTime int) {
 }
 
 func randSleep(randTime, addTime int) {
-	rand.Seed(time.Now().UnixNano())
 	r := rand.Intn(randTime*100) + 1
 	t := time.Second/100*time.Duration(r) + time.Second*time.Duration(addTime)
 	time.Sleep(t)
@@ -372,7 +378,6 @@ func randSleep(randTime, addTime int) {
 }
 
 func randChoice(list []string) string {
-	rand.Seed(time.Now().UnixNano())
 	return list[rand.Intn(len(list))]
 }
 
@@ -437,8 +442,15 @@ func st(i int) string {
 }
 
 func isRand(v float32) bool {
-	rand.Seed(time.Now().UnixNano())
 	return rand.Float32()*100 < v
+}
+
+func randFloat(rnd, add float32) float32 {
+	return rand.Float32()*rnd + add
+}
+
+func RandFloat(rnd, add float32) float32 {
+	return randFloat(rnd, add)
 }
 
 type RE struct {
@@ -573,7 +585,7 @@ func getUserInfoFromApi(userIds ...string) (*[]UserInfoFields, error) {
 
 		form := url.Values{
 			"v":            {vApi},
-			"access_token": {configs.TOKEN_GROUP},
+			"access_token": {configs.C.Token()},
 			"fields":       {"photo_200,last_seen"},
 			"user_ids":     {strings.Join(users, ",")},
 		}
@@ -878,4 +890,115 @@ func finderFirst(b []byte, str1, str2 string) string {
 	}
 	return r[0]
 
+}
+
+type Params struct {
+	ToBlackList                   bool
+	Targets                       []string
+	Message                       string
+	FromGroup                     bool
+	RndRepost, RndLike, RndTarget float32
+	TargetGroup                   string
+	LastSeen                      int
+}
+
+type Task struct {
+	time  float32
+	start bool
+	end   bool
+	f     func(p *Params)
+	arg   *Params
+}
+
+func NewTask(f func(p *Params), t float32, arg *Params) *Task {
+	t = float32(time.Now().Unix()) + t
+	a := &Task{
+		time:  t,
+		f:     f,
+		arg:   arg,
+		end:   false,
+		start: false,
+	}
+	return a
+}
+
+type Loop struct {
+	task []*Task
+	mu   *sync.Mutex
+}
+
+func NewLoop() *Loop {
+	mu := &sync.Mutex{}
+	task := make([]*Task, 150, 150)
+	for i := range task {
+		task[i] = new(Task)
+	}
+
+	l := &Loop{
+		mu:   mu,
+		task: task,
+	}
+	go l.worker()
+	return l
+}
+
+func (l *Loop) add(t *Task) {
+	l.mu.Lock()
+	a := false
+	for i := range l.task {
+		a = true
+		if l.task[i].time <= 0 {
+			l.task[i] = t
+			a = false
+			break
+		}
+	}
+	if a {
+		temp := make([]*Task, 0, cap(l.task)*2)
+		for i := range temp {
+			if i < len(l.task) {
+				temp[i] = l.task[i]
+			} else {
+				temp[i] = new(Task)
+			}
+		}
+		l.task = temp
+	}
+	l.mu.Unlock()
+
+	if a {
+		l.add(t)
+	}
+}
+
+func (l *Loop) startTask(t *Task) *Task {
+	t.start = true
+	randSleep(1, 0)
+	t.f(t.arg)
+	t.end = true
+	return t
+}
+
+func (l *Loop) worker() {
+	iter := 0
+	for {
+		iter++
+		t1 := float32(time.Now().Unix())
+		for i := range l.task {
+			if l.task[i].time > 0 && l.task[i].time <= t1 && !l.task[i].start && !l.task[i].end {
+				go l.startTask(l.task[i])
+			}
+			if l.task[i].end {
+				l.task[i].time = 0
+				l.task[i].end = false
+				l.task[i].start = false
+			}
+		}
+
+		if iter%60 == 0 {
+			time.Sleep(time.Second * 1)
+			runtime.GC()
+		}
+		time.Sleep(time.Second * 1)
+	}
 }
