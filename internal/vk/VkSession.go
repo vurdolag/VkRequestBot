@@ -36,6 +36,8 @@ type Response struct {
 	end    int
 	vk     *VkSession
 	params map[string]string
+	url    string
+	check  []byte
 }
 
 func (self *Response) Finder(str1, str2 string, count int) []string {
@@ -165,24 +167,21 @@ func (self *Response) NewJs(q ...string) *Js {
 }
 
 func (self *Response) Check(msg string, err error) bool {
+	if self.vk == nil {
+		return false
+	}
+
 	if err != nil {
 		self.vk.log("ERROR! -->", msg, "-->", err)
 		self.vk.logs(fm("ERROR! msg = %s err = %v", msg, err), "error")
 		return false
 	}
 
-	index := self.start
-	ind := 0
-
-	for index <= len(CHECKOK) {
-		if self.data.data[index] != CHECKOK[ind] {
-			self.vk.log("ERROR! -->", msg)
-			self.vk.logs(fm("ERROR! msg = %s\n\tlogin = %s\n\tparams = %v\n\tbody = %s",
-				msg, self.vk.Login, self.params, string(self.getByte(100))), "vk_error")
-			return false
-		}
-		index++
-		ind++
+	if len(self.check) > 0 && self.check[len(self.check)-1] != []byte("0")[0] {
+		self.vk.log("ERROR! -->", msg)
+		self.vk.logs(fm("ERROR! msg = %s\n\turl = %s\n\tparams = %v\n\tbody: %s\n",
+			msg, self.url, self.params, string(self.getByte(100))), "vk_error")
+		return false
 	}
 	return true
 }
@@ -281,11 +280,6 @@ func (self *DataResponse) Write(b []byte) *Response {
 	self.muGlobal.Lock()
 
 	self.responseIds++
-	if len(b) > 1000000 {
-		logs(string(b), fm("reponse/%v", time.Now().UnixNano()))
-	}
-
-	logs(fm("write start -> b = %d, buf = %d, lP = %d, lA = %d", len(b), len(self.data), self.lastWriteIndex, self.test_t()), "writer")
 
 	key := self.responseIds
 	index := self.lastWriteIndex
@@ -314,9 +308,14 @@ func (self *DataResponse) Write(b []byte) *Response {
 	self.add(start, end, key)
 	self.lastWriteIndex = end
 
+	check := make([]byte, 0, len(CHECKOK))
+
 	for i := range b {
 		self.data[index] = b[i]
 		index++
+		if i < len(CHECKOK) {
+			check = append(check, b[i])
+		}
 	}
 
 	response := &Response{
@@ -324,9 +323,8 @@ func (self *DataResponse) Write(b []byte) *Response {
 		data:  self,
 		start: start,
 		end:   end,
+		check: check,
 	}
-
-	logs(fm("write end   -> b = %d, buf = %d, lP = %d, lA = %d", len(b), len(self.data), self.lastWriteIndex, self.test_t()), "writer")
 
 	self.muGlobal.Unlock()
 
@@ -357,10 +355,6 @@ func (self *DataResponse) Optimise() {
 
 		startP -= count
 		endP -= count
-
-		if startP < 0 || endP < 0 {
-			fmt.Println(startP, endP)
-		}
 
 		self.activeResponse[index] = []int{startP, endP, key}
 
@@ -435,12 +429,16 @@ func (self *DataResponse) del(key int) {
 	}
 }
 
-func (self *DataResponse) New() *Response {
+func (self *DataResponse) New(vk *VkSession, params map[string]string, url string) *Response {
 	return &Response{
-		id:    0,
-		data:  self,
-		start: 0,
-		end:   0}
+		id:     0,
+		data:   self,
+		start:  0,
+		end:    0,
+		vk:     vk,
+		params: params,
+		url:    url,
+	}
 }
 
 type VkSession struct {
@@ -484,7 +482,6 @@ func InitVkSession(akk Akk, re *RE, resp *DataResponse, mu *sync.Mutex,
 }
 
 func (self *VkSession) Auth() bool {
-	self.log("AUTH start")
 	jar, _ := cookiejar.New(nil)
 
 	proxyUrl, _ := url.Parse(self.Proxy)
@@ -574,7 +571,7 @@ func (self *VkSession) enterVk() bool {
 }
 
 func (self *VkSession) GET(targetUrl string) (*Response, error) {
-	r := self.response.New()
+	r := self.response.New(self, nil, targetUrl)
 	req, err := http.NewRequest("GET", targetUrl, nil)
 	if err != nil {
 		return r, err
@@ -604,11 +601,13 @@ func (self *VkSession) GET(targetUrl string) (*Response, error) {
 
 	r = self.response.Write(response)
 	r.vk = self
+	r.params = nil
+	r.url = targetUrl
 	return r, nil
 }
 
 func (self *VkSession) POST(targetUrl string, params map[string]string) (*Response, error) {
-	r := self.response.New()
+	r := self.response.New(self, params, targetUrl)
 	postData := url.Values{}
 	for key, val := range params {
 		postData.Set(key, val)
@@ -624,16 +623,16 @@ func (self *VkSession) POST(targetUrl string, params map[string]string) (*Respon
 	}
 
 	resp, err := self.Session.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return r, err
 	}
+
+	defer resp.Body.Close()
 
 	respBody, err := charset.NewReader(
 		resp.Body,
 		resp.Header.Get("Content-Type"))
 	if err != nil {
-		fmt.Println("Encoding error:", err)
 		return r, err
 	}
 
@@ -645,12 +644,11 @@ func (self *VkSession) POST(targetUrl string, params map[string]string) (*Respon
 	r = self.response.Write(res)
 	r.vk = self
 	r.params = params
+	r.url = targetUrl
 	return r, nil
 }
 
 func (self *VkSession) check() bool {
-	self.logs("Проверка авторизации...")
-
 	res, err := self.GET("https://vk.com/feed")
 	defer res.Close()
 	if err != nil {
@@ -675,7 +673,10 @@ func (self *VkSession) check() bool {
 }
 
 func (self *VkSession) log(msg ...interface{}) {
-	fmt.Println(self.Login, self.MyName, self.MyId, msg)
+	t := time.Now().Unix()
+	v := fm("%v", msg)
+	f := fm("%d > %12.12s %10.10s %9.9s > %s", t, self.Login, self.MyName, self.MyId, v[1:len(v)-1])
+	fmt.Println(f)
 }
 
 func (self *VkSession) logs(str ...string) {
@@ -691,14 +692,14 @@ func (self *VkSession) logs(str ...string) {
 
 	self.muGlobal.Lock()
 	t := time.Now().Unix()
-	logs(fm("%d > %s %s %s : %s", t, self.Login, self.MyName, self.MyId, content), name)
+	logs(fm("%d > %12.12s %10.10s %9.9s > %s", t, self.Login, self.MyName, self.MyId, content), name)
 	self.muGlobal.Unlock()
 }
 
 func (self *VkSession) logsErr(err error) {
 	self.muGlobal.Lock()
 	t := time.Now().Unix()
-	logs(fm("%d > %s %s %s : %v", t, self.Login, self.MyName, self.MyId, err), "error")
+	logs(fm("%d > %12.12s %10.10s %9.9s > %v", t, self.Login, self.MyName, self.MyId, err), "error")
 	self.muGlobal.Unlock()
 }
 
@@ -807,9 +808,9 @@ func (self *Methods) LongPoll(act *Action) {
 			if len(updates) != 0 {
 				for _, up := range updates {
 					event := new(Event)
-					self.vk.logs(fm("%v", string(up)), "update")
 					event.pars(up, false, self.vk.re)
 					if !event.empty {
+						self.vk.logs(fm("%v", string(up)), "update")
 						go act.eventProcessing(event)
 					}
 				}
@@ -911,9 +912,9 @@ func (self *Methods) LongPollFeed(act *Action) {
 				for _, up := range e {
 					up = delBackSlash(up)
 					event := new(Event)
-					self.vk.logs(fm("%s", string(up)), "update_feed")
 					event.pars(up, true, self.vk.re)
 					if !event.empty {
+						self.vk.logs(fm("%s", string(up)), "update_feed")
 						go act.eventProcessing(event)
 					}
 				}
@@ -1817,7 +1818,7 @@ func (self *Methods) commentPhoto(idPhoto, msg, hashC string, fromId int) bool {
 	}
 }
 
-func (self *Methods) viewPost(idPosts []string, target []string, randomView float32) bool {
+func (self *Methods) viewPost(idPosts []string, target []string, randomView int) bool {
 	var finIdPosts = make([]string, 0, 20)
 	var data, meta, pref string
 
@@ -1868,7 +1869,7 @@ func (self *Methods) getNewFriendList() (map[string][]string, error) {
 
 	res, err = self.vk.GET("https://vk.com/friends?section=requests")
 	defer res.Close()
-	if !res.Check("error get new friend page", err) {
+	if err != nil {
 		return nil, err
 	}
 
@@ -1924,8 +1925,8 @@ func (self *Methods) getFriendsRequests(value map[string][]string, offset int) m
 			"section": "requests",
 		}
 		res, err = self.vk.POST(friends, params)
-		defer res.Close()
 		if !res.Check("error get_section_friends", err) {
+			res.Close()
 			return value
 		}
 
@@ -1933,6 +1934,7 @@ func (self *Methods) getFriendsRequests(value map[string][]string, offset int) m
 		requests, err = jsArr(delBackSlash(j), "requests")
 		if len(requests) == 0 || err != nil {
 			self.vk.logsErr(err)
+			res.Close()
 			return value
 		}
 
@@ -1950,6 +1952,7 @@ func (self *Methods) getFriendsRequests(value map[string][]string, offset int) m
 		} else {
 			break
 		}
+		res.Close()
 		randSleep(10, 2)
 	}
 	return value

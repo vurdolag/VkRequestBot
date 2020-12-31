@@ -12,6 +12,7 @@ import (
 var loop = NewLoop()
 
 func InitAction(vk *VkSession, data *DataAnswer, bd *DataBase) *Action {
+	rand.Seed(time.Now().UnixNano())
 	act := new(Action)
 	act.bd = bd
 	act.vk = vk
@@ -36,9 +37,10 @@ type Action struct {
 	alreadyDelDialog []int
 }
 
-func (self *Action) Add(f func(p *Params), rnd, add float32, p *Params) {
+func (self *Action) Add(f func(p *Params), rnd, add int, p *Params) {
+	time.Sleep(time.Millisecond * 100)
 	if self.vk.methods.working {
-		self.loop.add(NewTask(f, randFloat(rnd, add), p))
+		self.loop.add(NewTask(f, rand.Intn(rnd)+add, p))
 	}
 }
 
@@ -180,7 +182,7 @@ func (self *Action) acceptOrDeclineNewFriend() error {
 
 func (self *Action) Online(p *Params) {
 	self.vk.methods.setOnline()
-	self.Add(self.Online, 240, 180, p)
+	self.Add(self.Online, 240, 150, p)
 }
 
 func (self *Action) CheckFriends(p *Params) {
@@ -495,16 +497,12 @@ func (self *BotAnswer) voiceMessageProcessing(event Event, messageText string, m
 func (self *BotAnswer) getAnswer(event *Event) (string, [][][]string) {
 	message := enc(strings.ToLower(event.text))
 
-	t1 := time.Now().UnixNano()
-
 	var answers = make([][][]string, 0, 10)
 	for index := range self.data.botDataBase {
 		if self.vk.re.Check(message, self.data.botDataBase[index][0][0]) {
 			answers = append(answers, self.data.botDataBase[index])
 		}
 	}
-
-	fmt.Println("time ->", time.Now().UnixNano()-t1)
 
 	if len(answers) > 0 {
 		return randChoice(answers[0][1]), answers

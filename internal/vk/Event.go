@@ -79,6 +79,7 @@ type Event struct {
 }
 
 func (self *Event) pars(update []byte, fromFeed bool, re *RE) *Event {
+	self.empty = true
 	if fromFeed {
 		j := NewJs(update)
 
@@ -107,6 +108,7 @@ func (self *Event) pars(update []byte, fromFeed bool, re *RE) *Event {
 			comment.typeComment = feed.Type
 			self.comment = comment
 			self.fromId = comment.fromId
+			self.empty = false
 			return self
 		}
 	}
@@ -121,6 +123,7 @@ func (self *Event) pars(update []byte, fromFeed bool, re *RE) *Event {
 			if typeUpId > 100 && fromId > 2000000000 {
 				self.messageFromChat = true
 				self.fromId = fromId
+				self.empty = false
 				return self
 			}
 
@@ -131,6 +134,7 @@ func (self *Event) pars(update []byte, fromFeed bool, re *RE) *Event {
 				self.fromId = fromId
 				self.timeStamp = j.Int(4)
 				self.messageId = j.Int(1)
+				self.empty = false
 				return self
 			}
 		}

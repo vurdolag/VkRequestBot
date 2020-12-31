@@ -23,19 +23,20 @@ var listClub = []string{
 
 func bot(w *sync.WaitGroup) {
 	conf, _ := configs.New(*confPath)
+	answer := vk.InitAnswerDataBase(conf)
+	accounts := vk.LoadAccount(conf)
 
 	muGlobal := new(sync.Mutex)
 	re := vk.InitRE(muGlobal)
 	bd := vk.InitDataBase(muGlobal)
-	answer := vk.InitAnswerDataBase(conf)
 	resp := vk.InitDataResponse(muGlobal)
-	accounts := vk.LoadAccount(conf)
 
 	vkSessions := make([]*vk.VkSession, 0, len(accounts))
 
 	for _, acc := range accounts {
 		session := vk.InitVkSession(acc, re, resp, muGlobal, conf, w)
 		vkSessions = append(vkSessions, session)
+		time.Sleep(time.Millisecond * 100)
 	}
 
 	go server.Run(vkSessions, conf)
@@ -61,13 +62,13 @@ func bot(w *sync.WaitGroup) {
 		act.LongPool()
 
 		act.Add(act.Online, 1, 180, p)
-		act.Add(act.CheckFriends, 900, 120, p)
-		act.Add(act.DelOutRequests, 900, 120, p1)
-		act.Add(act.DelBadFriends, 900, 120, p3)
-		act.Add(act.Reposter, 900, 120, p4)
-		act.Add(act.RandomLikeFeed, 900, 120, p)
+		act.Add(act.CheckFriends, 1200, 60, p)
+		act.Add(act.DelOutRequests, 1200, 60, p1)
+		act.Add(act.DelBadFriends, 1200, 60, p3)
+		act.Add(act.Reposter, 1200, 60, p4)
+		act.Add(act.RandomLikeFeed, 1200, 60, p)
 
-		vk.RandSleep(50, 10)
+		vk.RandSleep(40, 1)
 	}
 }
 

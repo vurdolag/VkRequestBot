@@ -168,21 +168,24 @@ func requestsPost(targetUrl string, params, headers map[string]string, byteData 
 
 func postForm(targetUrl string, form url.Values) ([]byte, error) {
 	resp, err := http.PostForm(targetUrl, form)
-	defer resp.Body.Close()
 	if err != nil {
-		fmt.Println(err)
+		logsErr(err)
+		return nil, err
 	}
+	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println(err)
+		logsErr(err)
+		return nil, err
+
 	}
 
-	runtime.GC()
 	return body, nil
 }
 
 func LoadAccount(conf configs.ConfI) []Akk {
+	rand.Seed(time.Now().UnixNano())
 	file, _ := LoadFile(conf.GetAccountPath())
 	var v []Akk
 
@@ -226,13 +229,12 @@ func WriteFile(path, source string) bool {
 func writeNewFileTxt(path, source string) bool {
 	file, err := os.Create(path)
 	if err != nil {
-		fmt.Println("Unable to create file:", err)
 		return false
 	}
 	defer file.Close()
 	_, err = file.Write([]byte(source))
 	if err != nil {
-		fmt.Println(err)
+		return false
 	}
 	return true
 }
@@ -396,14 +398,12 @@ func logs(str ...string) bool {
 
 	file, err := os.OpenFile(fm("app/logs/%s.txt", name), os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
-		fmt.Println(err)
 		writeNewFileTxt(fm("app/logs/%s.txt", name), content)
 		return false
 	}
 	defer file.Close()
 
 	if _, err = file.WriteString(content); err != nil {
-		fmt.Println(err)
 		return false
 	}
 	return true
@@ -412,7 +412,6 @@ func logs(str ...string) bool {
 func logsErr(err error) {
 	t := time.Now().Unix()
 	logs(fm("%d > %v", t, err), "error")
-	fmt.Println(err)
 }
 
 func IsIn(str string, list []string) bool {
@@ -441,16 +440,8 @@ func st(i int) string {
 	return strconv.Itoa(i)
 }
 
-func isRand(v float32) bool {
-	return rand.Float32()*100 < v
-}
-
-func randFloat(rnd, add float32) float32 {
-	return rand.Float32()*rnd + add
-}
-
-func RandFloat(rnd, add float32) float32 {
-	return randFloat(rnd, add)
+func isRand(v int) bool {
+	return rand.Intn(101) <= v
 }
 
 type RE struct {
@@ -897,21 +888,21 @@ type Params struct {
 	Targets                       []string
 	Message                       string
 	FromGroup                     bool
-	RndRepost, RndLike, RndTarget float32
+	RndRepost, RndLike, RndTarget int
 	TargetGroup                   string
 	LastSeen                      int
 }
 
 type Task struct {
-	time  float32
+	time  int
 	start bool
 	end   bool
 	f     func(p *Params)
 	arg   *Params
 }
 
-func NewTask(f func(p *Params), t float32, arg *Params) *Task {
-	t = float32(time.Now().Unix()) + t
+func NewTask(f func(p *Params), t int, arg *Params) *Task {
+	t = int(time.Now().Unix()) + t
 	a := &Task{
 		time:  t,
 		f:     f,
@@ -974,6 +965,7 @@ func (l *Loop) add(t *Task) {
 func (l *Loop) startTask(t *Task) *Task {
 	t.start = true
 	randSleep(1, 0)
+	rand.Seed(time.Now().UnixNano())
 	t.f(t.arg)
 	t.end = true
 	return t
@@ -983,9 +975,10 @@ func (l *Loop) worker() {
 	iter := 0
 	for {
 		iter++
-		t1 := float32(time.Now().Unix())
+		t1 := int(time.Now().Unix())
 		for i := range l.task {
 			if l.task[i].time > 0 && l.task[i].time <= t1 && !l.task[i].start && !l.task[i].end {
+				logs(fm("%d, %d", l.task[i].time, t1), "loop")
 				go l.startTask(l.task[i])
 			}
 			if l.task[i].end {
@@ -995,8 +988,7 @@ func (l *Loop) worker() {
 			}
 		}
 
-		if iter%60 == 0 {
-			time.Sleep(time.Second * 1)
+		if iter%180 == 0 {
 			runtime.GC()
 		}
 		time.Sleep(time.Second * 1)
